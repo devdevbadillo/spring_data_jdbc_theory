@@ -35,8 +35,46 @@
         - [Método commit](#metodo-commit)
         - [Método rollback](#metodo-rollback)
     - [Niveles de aislamiento de transacciones](#niveles-de-aislamiento-en-transacciones)
-       
-
+ - [Fundamentos Spring Data JDBC](#fundamentos-de-spring-data-jdbc)
+     - [¿Qués es Spring Data?](#que-es-spring-data)
+        - [Spring Data Commons](#spring-data-commons)
+            - [Repositories](#repositories)
+            - [CrudRepository](#crud-repository)
+            - [PagingAndSortingRepository](#paging-and-sorting-repository)
+            - [Query Methods](#query-method)
+            - [La anotación @Param](#anotacion-param)
+            - [Proyecciones (Projections)](#proyecciones)
+    - [¿Qué es Spring Data JDBC?](#que-es-spring-data-jdbc)
+        - [Configuración de Spring Data JDBC](#configuracion-de-spring-data-jdbc)
+            - [Dependencias y configuración de la base de datos](#configuracion-y-dependencias)
+        - [Entidades y Mapeo](#entidades-y-mapeo)
+            - [Anotaciones de Mapeo](#anotaciones-de-mapeo)
+                - [La anotación @Table](#la-anotacion-table)
+                - [La anotación @Column](#la-anotacion-column)
+                - [La anotación @Transient](#la-anotacion-transient)
+                - [La anotación @MappedCollection](#la-anotacion-mapped-collection)
+            - [Generación de Claves](#generacion-de-claves)
+                - [Las anotaciones @Id y @GeneratedValue](#la-anotacion-id-y-generated-value)
+            - [Relaciones](#relaciones)
+                - [Uno-a-Uno](#uno-a-uno)
+                - [Uno-a-Muchos](#uno-a-muchos)
+                - [Muchos-a-Muchos](#muchos-a-muchos)
+            - [Conversión de datos con Spring Data JDBC](#conversion-de-datos-spring-data-jdbc)
+        - [Repositorios en Spring Data JDBC](#repositorios-en-spring-data-jdbc)
+            - [Creación de Interfaces de Repositorio](#creacion-de-interfaces)
+            - [Query Methods](#query-methods-spring-datajdbc)
+            - [La anotación @Query](#la-anotacion-query)
+            - [Consultas Nativas](#consultas-nativas)
+            - [Implementaciones Personalizadas de Repositorio](#personalizando-el-repositorio)
+        - [Manejo de Transacciones](#manejo-de-transacciones)
+            - [La anotación @Transactional](#anotacion-transactional)
+            - [Propagación de Transacciones](#propagacion-de-transacciones)
+        - [Auditoría](#auditoria)
+            - [La anotación @CreatedBy](#la-anotacion-createdby)
+            - [La anotación @LastModifiedBy](#la-anotacion-lastmodifiedby)
+            - [La anotación @CreatedDate](#la-anotacion-created-date)
+            - [La anotación @LastModifiedDate](#la-anotacion-last-modfied-date)
+        - [Eventos de Dominio](#eventos-de-dominio)
 
 <a id="fundamentos-JDBC"></a>
 # Fudamentos de JDBC
@@ -428,4 +466,123 @@ Evita las lecturas sucias y las lecturas no repetibles. Sin embargo, todavía pu
 
 Garantiza que las transacciones concurrentes se ejecuten de forma completamente aislada, como si se ejecutaran en serie (una después de la otra). Evita las lecturas sucias, las lecturas no repetibles y las lecturas fantasma
 
+<a id="fundamentos-de-spring-data-jdbc"></a>
+## Fundamentos Spring Data JDBC
 
+<a id="que-es-spring-data"></a>
+### ¿Qués es Spring Data?
+
+<a id="spring-data-commons"></a>
+### Spring Data Commons
+
+<a id="repositories"></a>
+#### Repositories
+
+<a id="crud-repository"></a>
+#### CrudRepository
+
+<a id="paging-and-sorting-repository"></a>
+#### PagingAndSortingRepository
+
+<a id="query-method"></a>
+#### Query Methods
+
+<a id="anotacion-param"></a>
+#### La anotación @Param
+
+<a id="proyecciones"></a>
+#### Proyecciones (Projections)
+
+<a id="que-es-spring-data-jdbc"></a>
+### ¿Qué es Spring Data JDBC?
+
+<a id="configuracion-de-spring-data-jdbc"></a>
+#### Configuración de Spring Data JDBC
+
+<a id="configuracion-y-dependencias"></a>
+##### Dependencias y configuración de la base de datos
+
+<a id="#entidades-y-mapeo"></a>
+### Entidades y Mapeo
+
+<a id="anotaciones-de-mapeo"></a>
+#### Anotaciones de Mapeo
+
+<a id="la-anotacion-table"></a>
+##### La anotación @Table
+
+<a id="la-anotacion-column"></a>
+##### La anotación @Column
+
+<a id="la-anotacion-transient"></a>
+##### La anotación @Transient
+
+<a id="la-anotacion-mapped-collection"></a>
+##### La anotación @MappedCollection
+
+<a id="generacion-de-claves"></a>
+#### Generación de Claves
+
+<a id="la-anotacion-id-y-generated-value"></a>
+##### Las anotaciones @Id y @GeneratedValue
+
+<a id="relaciones"></a>
+#### Relaciones
+
+<a id="uno-a-uno"></a>
+##### Uno-a-Uno
+
+<a id="uno-a-muchos"></a>
+##### Uno-a-Muchos
+
+<a id="muchos-a-muchos"></a>
+##### Muchos-a-Muchos
+
+<a id="conversion-de-datos-spring-data-jdbc"></a>
+#### Conversión de datos con Spring Data JDBC
+
+<a id="repositorios-en-spring-data-jdbc"></a>
+### Repositorios en Spring Data JDBC
+
+<a id="creacion-de-interfaces"></a>
+#### Creación de Interfaces de Repositorio
+
+<a id="query-methods-spring-datajdbc"></a>
+#### Query Methods
+
+<a id="la-anotacion-query"></a>
+#### La anotación @Query
+
+<a id="consultas-nativas"></a>
+#### Consultas Nativas
+
+<a id="personalizando-el-repositorio"></a>
+#### Implementaciones Personalizadas de Repositorio
+
+<a id="manejo-de-transacciones"></a>
+### Manejo de Transacciones
+
+<a id="anotacion-transactional"></a>
+#### La anotación @Transactional
+
+<a id="propagacion-de-transacciones"></a>
+#### Propagación de Transacciones
+
+<a id="auditoria"></a>
+### Auditoría
+
+<a id="la-anotacion-createdby"></a>
+#### La anotación @CreatedBy
+
+<a id="la-anotacion-lastmodifiedby"></a>
+#### La anotación @LastModifiedBy
+
+<a id="la-anotacion-created-date"></a>
+#### La anotación @CreatedDate
+
+<a id="la-anotacion-last-modfied-date"></a>
+#### La anotación @LastModifiedDate
+
+
+<a id="eventos-de-dominio"></a>
+### Eventos de Dominio

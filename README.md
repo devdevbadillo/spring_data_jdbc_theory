@@ -42,7 +42,6 @@
             - [CrudRepository](#crud-repository)
             - [PagingAndSortingRepository](#paging-and-sorting-repository)
             - [Query Methods](#query-method)
-            - [La anotación @Param](#anotacion-param)
             - [Proyecciones (Projections)](#proyecciones)
     - [¿Qué es Spring Data JDBC?](#que-es-spring-data-jdbc)
         - [Configuración de Spring Data JDBC](#configuracion-de-spring-data-jdbc)
@@ -59,11 +58,10 @@
                 - [Uno-a-Uno](#uno-a-uno)
                 - [Uno-a-Muchos](#uno-a-muchos)
                 - [Muchos-a-Muchos](#muchos-a-muchos)
-            - [Conversión de datos con Spring Data JDBC](#conversion-de-datos-spring-data-jdbc)
         - [Repositorios en Spring Data JDBC](#repositorios-en-spring-data-jdbc)
             - [Creación de Interfaces de Repositorio](#creacion-de-interfaces)
-            - [Query Methods](#query-methods-spring-datajdbc)
             - [La anotación @Query](#la-anotacion-query)
+            - [La anotación @Param](#la-anotacion-param)
             - [Consultas Nativas](#consultas-nativas)
             - [Implementaciones Personalizadas de Repositorio](#personalizando-el-repositorio)
         - [Manejo de Transacciones](#manejo-de-transacciones)
@@ -471,78 +469,446 @@ Garantiza que las transacciones concurrentes se ejecuten de forma completamente 
 
 <a id="que-es-spring-data"></a>
 ### ¿Qués es Spring Data?
+Spring Data no es una única librería, sino una **colección de módulos**, donde cada módulo se enfoca en una tecnología de persistencia específica. Proporciona una capa de abstracción sobre estas diferentes tecnologías, permitiendo a los desarrolladores interactuar con los almacenes de datos.
+
+> Beneficios
+> 1. Minimiza la necesidad de escribir código repetitivo para tareas comunes de acceso a datos
+> 2. Ofrece una API más uniforme para interactuar con diferentes tipos de almacenes de datos
+> 3. Permite a los desarrolladores centrarse más en la lógica de negocio de la aplicación en lugar de los detalles de bajo nivel de la persistencia de datos.
 
 <a id="spring-data-commons"></a>
 ### Spring Data Commons
+Spring Data Commons **es el núcleo** sobre el cual se construyen todos los módulos específicos de Spring Data. Proporciona un conjunto de abstracciones y conceptos fundamentales que son **compartidos por todos los módulos**, independientemente de la tecnología de persistencia subyacente. 
 
 <a id="repositories"></a>
 #### Repositories
+La interfaz Repository es la **interfaz central de la abstracción de persistencia de datos** en Spring Data. Actúa como un marcador para indicar que una interfaz **es un componente de acceso a datos** (un "Data Access Object" o DAO en patrones tradicionales).
+
+> [!NOTE]
+> En sí misma, la interfaz Repository **no define ningún método específico** para las operaciones de datos. Su principal función es la de ser una interfaz base que otras interfaces más especializadas extienden para proporcionar funcionalidades concretas.
+
+En el siguiente código, UsuarioRepository es un repositorio que gestiona entidades de tipo Usuario y utiliza Long para **identificar las instancias de Usuario**.
+```
+import org.springframework.data.repository.Repository;
+
+// Interfaz de repositorio para la entidad 'Usuario'
+public interface UsuarioRepository extends Repository<Usuario, Long> {
+    // 'Usuario' es el tipo de entidad que este repositorio gestiona
+    // 'Long' es el tipo del ID de la entidad 'Usuario'
+}
+```
 
 <a id="crud-repository"></a>
 #### CrudRepository
+La interfaz CrudRepository es una extensión de Repository que proporciona métodos estándar para las operaciones CRUD (Create, Read, Update, Delete) en una entidad.
+
+```
+import org.springframework.data.repository.CrudRepository;
+import java.util.List;
+
+public interface UsuarioRepository extends CrudRepository<Usuario, Long> {
+    // Hereda métodos como:
+    // - <S extends T> S save(S entity); // Guardar o actualizar una entidad
+    // - Optional<T> findById(ID id);    // Buscar una entidad por su ID
+    // - boolean existsById(ID id);     // Verificar si una entidad con el ID existe
+    // - Iterable<T> findAll();         // Obtener todas las entidades
+    // - long count();                 // Contar el número de entidades
+    // - void deleteById(ID id);        // Eliminar una entidad por su ID
+    // - void delete(T entity);         // Eliminar una entidad
+    // - void deleteAll(Iterable<? extends T> entities); // Eliminar múltiples entidades
+    // - void deleteAll();              // Eliminar todas las entidades
+}
+```
+
+Al extender CrudRepository, tu UsuarioRepository automáticamente tendrá disponibles todos estos métodos básicos para interactuar con la tabla usuario en la base de datos, **sin necesidad de escribir ninguna implementación**.
 
 <a id="paging-and-sorting-repository"></a>
 #### PagingAndSortingRepository
+La interfaz PagingAndSortingRepository es otra extensión de CrudRepository que añade métodos para realizar la **paginación y el ordenamiento** de los resultados de las consultas.
+
+Se muestra el siguiente método, se puede observar lo fácil que es el implementar las funcionalidades de paginación en las APIs gracias a Spring Data.
+```
+import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
+public interface UsuarioRepository extends PagingAndSortingRepository<Usuario, Long> {
+    // Hereda todos los métodos de CrudRepository
+    // Además, añade métodos como:
+    // - Iterable<T> findAll(Sort sort); // Obtener todas las entidades ordenadas
+    // - Page<T> findAll(Pageable pageable); // Obtener una página de entidades (con ordenamiento implícito en Pageable)
+}
+```
+
+- Sort: Un objeto que define los criterios de ordenamiento (por qué campo y en qué dirección).
+- Pageable: Un objeto que encapsula la información sobre la paginación (número de página, tamaño de la página, y opcionalmente, el ordenamiento).
+- Page: Un objeto que representa una página de resultados, incluyendo el contenido, el número total de elementos, el número total de páginas, etc.
 
 <a id="query-method"></a>
 #### Query Methods
+Una de las características más poderosas de Spring Data Commons es la capacidad de derivar consultas automáticamente a partir de los nombres de los métodos que se definen en las interfaces de repositorio. Spring Data analiza el nombre del método siguiendo ciertas convenciones y genera la consulta de base de datos correspondiente.
 
-<a id="anotacion-param"></a>
-#### La anotación @Param
+> Sintaxis básica de los Query Methods:
+
+Los nombres de los métodos generalmente comienzan con un prefijo (como find...By, getBy..., count...By, exists...By, delete...By) seguido del nombre de uno o más atributos de la entidad. Es posible usar operadores para especificar las condiciones de búsqueda (como Equals, LessThan, GreaterThan, Like, Between, In, IsNull, IsNotNull, OrderBy).
+
+> Ejemplo
+```
+public interface UsuarioRepository extends CrudRepository<Usuario, Long> {
+    // Buscar usuarios por su nombre (atributo 'nombre' de la entidad Usuario)
+    List<Usuario> findByNombre(String nombre);
+
+    // Buscar usuarios por su email exacto
+    Usuario getByEmail(String email);
+
+    // Buscar usuarios cuya edad sea mayor que un valor dado
+    List<Usuario> findByEdadGreaterThan(int edad);
+
+    // Buscar usuarios cuyo nombre contenga una cierta cadena (usando 'like' en SQL)
+    List<Usuario> findByNombreContaining(String parteDelNombre);
+
+    // Buscar usuarios activos y ordenados por fecha de creación descendente
+    List<Usuario> findByActivoTrueOrderByFechaCreacionDesc();
+
+    // Contar el número de usuarios con un cierto estado
+    long countByEstado(String estado);
+
+    // Verificar si existe algún usuario con un email específico
+    boolean existsByEmail(String email);
+
+    // Eliminar usuarios con un cierto estado
+    void deleteByEstado(String estado);
+}
+```
 
 <a id="proyecciones"></a>
 #### Proyecciones (Projections)
+Las proyecciones en Spring Data Commons te permiten recuperar solo un subconjunto de los atributos de una entidad cuando se realiza una consulta. 
+
+> Proyecciones basadas en interfaces (Interface-based Projections)
+Se define una interfaz cuyos **métodos corresponden a los atributos que deseas recuperar**. Spring Data se encarga de crear una implementación de esta interfaz en tiempo de ejecución, utilizando los datos de la entidad.
+
+> Ejemplo 
+```
+public interface UsuarioNombreEmail {
+    String getNombre();
+    String getEmail();
+}
+
+public interface UsuarioRepository extends CrudRepository<Usuario, Long> {
+    List<UsuarioNombreEmail> findByActivoTrue();
+}
+```
+
+En este caso, la consulta findByActivoTrue() devolverá una lista de objetos que implementan la interfaz UsuarioNombreEmail, conteniendo solo el nombre y el email de los usuarios activos
+
+> Proyecciones basadas en clases cerradas (Class-based Projections - DTOs)
+Es posible utilizar una clase simple de transferencia de datos (DTO) como tipo de retorno para los métodos de consulta. Spring Data intentará mapear los resultados de la consulta a las propiedades del DTO.
+
+> [!IMPORTANT]
+> Los nombres de los atributos del DTO deben coincidir con los nombres de las columnas o alias en la consulta
 
 <a id="que-es-spring-data-jdbc"></a>
 ### ¿Qué es Spring Data JDBC?
+Se ha mencionado con anterioridad que Spring Data es un conjunto de módulos. Spring Data JDBC es uno de estos módulos, diseñado específicamente para simplificar el acceso a **bases de datos relacionales** utilizando JDBC como la capa de acceso a datos subyacente.
 
 <a id="configuracion-de-spring-data-jdbc"></a>
 #### Configuración de Spring Data JDBC
+Para comenzar a utilizar Spring Data JDBC dentro de un proyecto de Spring, primero es necesario incluir las dependencias necesarias. Es recomendable hacer uso de Spring Boot, debido que simplifica enormemente gracias a los "Starters". El starter específico para Spring Data JDBC es **spring-boot-starter-data-jdbc**.
+
+> Ejemplo de dependencia en Maven (pom.xml)
+```
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jdbc</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>com.mysql</groupId>
+    <artifactId>mysql-connector-j</artifactId>
+    <scope>runtime</scope>
+</dependency>
+```
+
+Donde:
+1. Al incluir el spring-boot-starter-data-jdbc, Spring Boot automáticamente gestionará las dependencias transitivas necesarias para Spring Data JDBC y el core de JDBC.
+2. El artefacto con el id **mysql-connector-j** es el **Driver** para poder establecer conexión con la base de datos.
 
 <a id="configuracion-y-dependencias"></a>
 ##### Dependencias y configuración de la base de datos
+Una vez que se tienen las dependencias, el siguiente paso es configurar la conexión a tu base de datos. Spring Boot utiliza el **DataSource de Spring Framework** para esto. Es posible configurar los detalles de la conexión (URL, usuario, contraseña, driver) a través de las **propiedades de Spring Boot** en el archivo application.properties o application.yml.
+
+> Ejemplo de una configuración con el application.yml
+
+```
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/tu_base_de_datos
+    username: tu_usuario
+    password: tu_contraseña
+    driver-class-name: com.mysql.cj.jdbc.Driver
+```
+Spring Boot intentará automáticamente configurar un DataSource basado en estas propiedades. Debido a esto, no es necesario escribir explícitamente el código para obtener y liberar conexiones como se tendría que realizar con JDBC puro.
+
+> [!NOTE]
+> Si es necesaria una configuración más avanzada, es posible crear un propio DataSource cómo **Bean** y Spring Boot lo utilizará
 
 <a id="#entidades-y-mapeo"></a>
 ### Entidades y Mapeo
+En Spring Data JDBC, las entidades **son las clases Java que representan las tablas** dentro de una base de datos. El mapeo es el proceso de definir cómo los atributos de tus clases de entidad se corresponden con las columnas de las tablas.
+
+Spring Data JDBC utiliza anotaciones para facilitar este mapeo.
 
 <a id="anotaciones-de-mapeo"></a>
 #### Anotaciones de Mapeo
+Spring Data JDBC proporciona varias anotaciones en el paquete org.springframework.data.relational.core.mapping (y algunas relacionadas en otros paquetes de Spring Data) para configurar el mapeo entre las entidades y la base de datos.
 
 <a id="la-anotacion-table"></a>
 ##### La anotación @Table
+La anotación @Table se utiliza a **nivel de clase** para especificar el nombre de la tabla en la base de datos a la que se mapea la entidad.
+
+> [!IMPORTANT]
+> Si no se utiliza esta anotación, Spring Data JDBC intentará inferir el nombre de la tabla a partir del nombre de la clase (convirtiendo de CamelCase a snake_case).
+
+> Ejemplo
+```
+import org.springframework.data.relational.core.mapping.Table;
+
+@Table("usuarios") // La entidad Usuario se mapea a la tabla 'usuarios'
+public class Usuario {
+    // ... atributos ...
+}
+```
 
 <a id="la-anotacion-column"></a>
 ##### La anotación @Column
+La anotación @Column se utiliza a **nivel de atributo** (campo) para especificar el nombre de la columna en la base de datos a la que se mapea el atributo. También permite configurar otras propiedades de la columna, como la longitud, si permite valores nulos, etc.
+
+> [!IMPORTANT]
+> Si no se utiliza esta anotación, Spring Data JDBC intentará inferir el nombre de la columna a partir del nombre del atributo (convirtiendo de CamelCase a snake_case)
+
+> Ejemplo
+```
+import org.springframework.data.relational.core.mapping.Column;
+
+public class Usuario {
+    @Id
+    private Long id;
+
+    @Column("nombre_completo") // El atributo 'nombre' se mapea a la columna 'nombre_completo'
+    private String nombre;
+
+    @Column(value = "correo_electronico", nullable = false, length = 100)
+    private String email;
+
+    private int edad; // Se mapea a la columna 'edad' por defecto
+
+    // ... getters y setters ...
+}
+```
 
 <a id="la-anotacion-transient"></a>
 ##### La anotación @Transient
+La anotación @Transient se utiliza a nivel de atributo para indicar que **un atributo de la entidad no debe ser persistido en la base de datos**. Es decir, este atributo **existirá en la clase Java pero no tendrá una columna correspondiente en la tabla**.
+
+> Ejemplo
+```
+import org.springframework.data.annotation.Transient;
+
+public class Usuario {
+    // ... atributos persistentes ...
+
+    @Transient
+    private String atributoTemporal; // Este atributo no se mapeará a una columna
+
+    // ... getters y setters para atributoTemporal ...
+}
+```
 
 <a id="la-anotacion-mapped-collection"></a>
 ##### La anotación @MappedCollection
+La anotación @MappedCollection sirve para indicar que un atributo de la entidad es una colección de otras entidades relacionadas.
+
+> Para relaciones uno-a-muchos
+
+Si una entidad **tiene una colección** de otras entidades relacionadas, y la relación se gestiona mediante una clave foránea en la tabla **de la entidad referenciada que apunta a la tabla de la entidad propietaria**, @MappedCollection se utiliza en el lado "uno" de la relación.
+
+> Ejemplo
+```
+@Table("clientes")
+public class Cliente {
+    @Id
+    private Long id;
+    private String nombre;
+
+    @MappedCollection(idColumn = "cliente_id") // 'cliente_id' es la clave foránea en la tabla 'ordenes'
+    private Set<Orden> ordenes;
+
+    // ...
+}
+
+@Table("ordenes")
+public class Orden {
+    @Id
+    private Long id;
+    private String numeroOrden;
+    @Column("cliente_id")
+    private Long clienteId; // Clave foránea que referencia a la tabla 'clientes'
+    // ...
+}
+```
+
+> Para relaciones muchos-a-muchos
+
+En una relación muchos-a-muchos, se suele utilizar una tabla de unión (junction table) para relacionar las dos entidades. Con @MappedCollection, se puede especificar cómo se debe realizar la consulta para obtener las entidades relacionadas a través de esta tabla de unión.
+
+> Ejemplo
+```
+@Table("productos")
+public class Producto {
+    @Id
+    private Long id;
+    private String nombre;
+
+    @MappedCollection(keyColumn = "producto_id", valueColumn = "categoria_id")
+    private Set<Long> categorias; // IDs de las categorías relacionadas
+
+    // ...
+}
+
+// No necesitas una clase explícita para la tabla de unión si solo contiene las claves foráneas.
+// Spring Data JDBC manejará la consulta basándose en la configuración de @MappedCollection.
+// Asumimos una tabla 'producto_categoria' con columnas 'producto_id' y 'categoria_id'.
+```
+En este caso, @MappedCollection indica que la colección categorias contiene los IDs de las categorías relacionadas. Spring Data JDBC utilizará la tabla de unión producto_categoria para obtener estos IDs.
 
 <a id="generacion-de-claves"></a>
 #### Generación de Claves
+Spring Data JDBC facilita la configuración de cómo se generan las claves primarias para las entidades creadas dentro del proyecto.
 
 <a id="la-anotacion-id-y-generated-value"></a>
 ##### Las anotaciones @Id y @GeneratedValue
 
+- La anotación @Id se utiliza a **nivel de atributo** para marcar el atributo como la clave primaria de la entidad
+- La anotación @GeneratedValue se utiliza junto con @Id para especificar la **estrategia de generación de la clave primaria**. Spring Data JDBC soporta diferentes estrategias, aunque la más común para bases de datos relacionales es la **generación automática por la base de datos**.
+
+```
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.GeneratedValue;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
+
+@Table("productos")
+public class Producto {
+    @Id
+    @GeneratedValue // Indica que la base de datos generará el valor del ID
+    private Long id;
+
+    private String nombre;
+    private Double precio;
+
+    // ...
+}
+```
+
 <a id="relaciones"></a>
 #### Relaciones
+El manejo de relaciones es un aspecto importante del mapeo objeto-relacional. Spring Data JDBC proporciona mecanismos para mapear las relaciones más comunes entre entidades.
 
 <a id="uno-a-uno"></a>
 ##### Uno-a-Uno
+En una relación uno-a-uno, cada instancia de una entidad **está relacionada con exactamente una instancia de otra entidad**. En la base de datos, esto se suele implementar con una clave foránea en una de las tablas que referencia la clave primaria de la otra tabla.
+
+La forma de mapear una relación uno-a-uno depende de la propiedad de la relación (qué tabla contiene la clave foránea).
+
+1. Si la entidad actual tiene la clave foránea, entonces, se utiliza un atributo de la entidad relacionada y se mapea a la columna de la clave foránea.
+
+> [!IMPORTANT]
+>  No hay una anotación @OneToOne explícita como en JPA. La relación se infiere por la existencia del atributo de la otra entidad y la clave foránea.
+
+2. Si la otra entidad tiene la clave foránea, entonces, se utiliza @MappedCollection en la entidad propietaria para indicar la relación.
+
+> Ejemplo
+
+```
+@Table("personas")
+public class Persona {
+    @Id
+    private Long id;
+    private String nombre;
+
+    @Column("direccion_id") // Clave foránea a la tabla 'direcciones'
+    private Long direccionId;
+
+    // ...
+}
+
+@Table("direcciones")
+public class Direccion {
+    @Id
+    private Long id;
+    private String calle;
+    private String ciudad;
+
+    // ...
+}
+```
+
+En este caso, la tabla personas tiene una clave foránea direccion_id que referencia la tabla direcciones. En la clase Persona, el atributo direccionId representa esta relación. Para acceder a la entidad Direccion, es necesario realizar una consulta separada utilizando el direccionId.
 
 <a id="uno-a-muchos"></a>
 ##### Uno-a-Muchos
+En una relación uno-a-muchos, una instancia de una entidad está relacionada con múltiples instancias de otra entidad. Esto se implementa con una clave foránea en la tabla de la entidad "muchos" que referencia la clave primaria de la entidad "uno".
+
+Como vimos con @MappedCollection, esta anotación se utiliza en el lado "uno" de la relación para indicar la colección de entidades "muchos"
+
+```
+@Table("clientes")
+public class Cliente {
+    @Id
+    private Long id;
+    private String nombre;
+
+    @MappedCollection(idColumn = "cliente_id") // 'cliente_id' es la clave foránea en la tabla 'ordenes'
+    private Set<Orden> ordenes;
+
+    // ...
+}
+
+@Table("ordenes")
+public class Orden {
+    @Id
+    private Long id;
+    private String numeroOrden;
+    @Column("cliente_id")
+    private Long clienteId; // Clave foránea que referencia a la tabla 'clientes'
+    // ...
+}
+```
 
 <a id="muchos-a-muchos"></a>
 ##### Muchos-a-Muchos
+En una relación muchos-a-muchos, múltiples instancias de una entidad pueden estar relacionadas con múltiples instancias de otra entidad. Esto se implementa utilizando una tabla de unión (junction table) que contiene las claves foráneas de ambas tablas relacionadas.
 
-<a id="conversion-de-datos-spring-data-jdbc"></a>
-#### Conversión de datos con Spring Data JDBC
+```
+@Table("productos")
+public class Producto {
+    @Id
+    @GeneratedValue
+    private Long id;
+    private String nombre;
+
+    @MappedCollection(keyColumn = "producto_id", valueColumn = "categoria_id")
+    private Set<Long> categorias; // IDs de las categorías relacionadas
+
+    // ...
+}
+```
 
 <a id="repositorios-en-spring-data-jdbc"></a>
 ### Repositorios en Spring Data JDBC
+Como se ha mencionado anteriormente, los repositorios en Spring Data son una abstracción para el acceso a datos. Spring Data JDBC sigue este paradigma, proporcionando interfaces que comunmente son extendidas para interactuar con las tablas de la base de datos.
 
 <a id="creacion-de-interfaces"></a>
 #### Creación de Interfaces de Repositorio
@@ -552,6 +918,9 @@ Garantiza que las transacciones concurrentes se ejecuten de forma completamente 
 
 <a id="la-anotacion-query"></a>
 #### La anotación @Query
+
+<a id="la-anotacion-param"></a>
+#### La anotación @Param
 
 <a id="consultas-nativas"></a>
 #### Consultas Nativas
@@ -582,7 +951,6 @@ Garantiza que las transacciones concurrentes se ejecuten de forma completamente 
 
 <a id="la-anotacion-last-modfied-date"></a>
 #### La anotación @LastModifiedDate
-
 
 <a id="eventos-de-dominio"></a>
 ### Eventos de Dominio

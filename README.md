@@ -908,49 +908,455 @@ public class Producto {
 
 <a id="repositorios-en-spring-data-jdbc"></a>
 ### Repositorios en Spring Data JDBC
-Como se ha mencionado anteriormente, los repositorios en Spring Data son una abstracción para el acceso a datos. Spring Data JDBC sigue este paradigma, proporcionando interfaces que comunmente son extendidas para interactuar con las tablas de la base de datos.
+Como se ha mencionado anteriormente, los repositorios en Spring Data son una **abstracción para el acceso a datos**. Spring Data JDBC sigue este paradigma, proporcionando interfaces que comunmente son extendidas para interactuar con las tablas de la base de datos.
 
 <a id="creacion-de-interfaces"></a>
 #### Creación de Interfaces de Repositorio
+Para obtener la funcionalidad básica **(CRUD, paginación, ordenamiento)**, de las interfaces de repositorio deben **extender las interfaces proporcionadas por Spring Data Commons**, como:
+
+1. CrudRepository<T, ID>
+2. PagingAndSortingRepository<T, ID>
+
+Aunque Spring Data JDBC **registrará automáticamente las interfaces** que extienden las interfaces base de repositorio, es una buena práctica anotar explícitamente las interfaces de repositorio con **@Repository**. Esto proporciona una mejor claridad semántica y permite que Spring maneje las excepciones específicas de la capa de persistencia a través de la infraestructura de traducción de excepciones de Spring.
+
+```
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ProductoRepository extends CrudRepository<Producto, Long> {
+    // ...
+}
+```
 
 <a id="query-methods-spring-datajdbc"></a>
 #### Query Methods
+Los Query Methods (Métodos de Consulta Derivados) son una forma poderosa de definir consultas sin escribir explícitamente SQL. Spring Data JDBC **analiza el nombre del método de acuerdo con ciertas convenciones** y genera la consulta SQL necesaria.
+
+> [!IMPORTANT]
+> El nombre de un método de consulta derivado generalmente sigue el patrón:
+>
+> - [prefijo][sujeto][predicado][By][atributo][operador][valor][And|Or][atributo][operador][valor]...[OrderBy][atributo][dirección]
+
+1. Prefijo: Indica el tipo de operación que se espera. Los prefijos comunes incluyen:
+  - find...By: Para buscar entidades. Puede devolver una o varias entidades, un Optional, un Stream, etc.
+  - get...By o read...By: Similar a find...By
+  - count...By: Para contar el número de entidades que cumplen con los criterios. Devuelve un long
+  - exists...By: Para verificar si existen entidades que cumplen con los criterios. Devuelve un boolean.
+  - delete...By o remove...By: Para eliminar entidades que cumplen con los criterios. Devuelve void o el número de entidades eliminadas.
+
+2. Sujeto (opcional): Puede incluir palabras clave como **Distinct** para asegurar que solo se devuelvan **resultados únicos**.
+
+3. By: Una palabra clave que actúa como separador entre el prefijo y los criterios de búsqueda.
+
+4. Atributo: El nombre de un **atributo de la entidad por el cual deseas realizar la búsqueda**. Es posible navegar por las propiedades anidadas utilizando la notación de puntos (por ejemplo, direccion.ciudad)
+
+5. Operador (opcional): Define la condición de comparación para el atributo. Algunos operadores comunes incluyen:
+   - Equals (o sin operador): Igual a un valor
+   - NotEquals o Not: No igual a un valor.
+   - LessThan: Menor que un valor
+   - LessThanEqual: Menor o igual que un valor
+   - GreaterThan: Mayor que un valor
+   - GreaterThanEqual: Mayor o igual que un valor
+   - Between: Entre dos valores (se requieren dos parámetros)
+   - Like: Coincide con un patrón (se utilizan comodines como %)
+   - StartingWith: Comienza con una cadena
+   - EndingWith: Termina con una cadena
+   - Containing: Contiene una cadena
+   - In: El atributo está en una colección de valores
+   - NotIn: El atributo no está en una colección de valores
+   - IsNull: El atributo es nulo
+   - IsNotNull o NotNull: El atributo no es nulo
+   - True: El atributo booleano es verdadero
+   - False: El atributo booleano es falso
+
+7. And/Or: Se utilizan para combinar múltiples criterios de búsqueda
+
+8. OrderBy: Especifica el atributo por el cual ordenar los resultados y la dirección (Asc para ascendente, Desc para descendente)
+
+> Ejemplo
+```
+import org.springframework.data.repository.CrudRepository;
+import java.util.List;
+
+public interface ProductoRepository extends CrudRepository<Producto, Long> {
+    List<Producto> findByNombre(String nombre); // Buscar productos por nombre
+
+    List<Producto> findByPrecioGreaterThan(Double precio); // Buscar productos con precio mayor que
+
+    List<Producto> findByNombreContainingIgnoreCase(String parteNombre); // Buscar productos cuyo nombre contenga (ignorando mayúsculas/minúsculas)
+
+    List<Producto> findByCategoriaIn(List<String> categorias); // Buscar productos en una lista de categorías
+
+    long countByPrecioBetween(Double minPrecio, Double maxPrecio); // Contar productos en un rango de precios
+
+    List<Producto> findByActivoTrueOrderByPrecioDesc(); // Buscar productos activos, ordenados por precio descendente
+}
+```
+Spring Data JDBC analizará estos nombres de métodos y generará las consultas SQL correspondientes. Internamente, utilizará la información de mapeo de las entidades para **determinar los nombres de las columnas y cómo construir las cláusulas WHERE y ORDER BY**
 
 <a id="la-anotacion-query"></a>
 #### La anotación @Query
+Aunque los Query Methods son muy útiles para consultas simples y comunes, a veces se necesita más control sobre la consulta SQL que se ejecuta. En estos casos, se puede utilizar la anotación **@Query** para escribir consultas SQL personalizadas directamente en los métodos del repositorio.
+
+> Ejemplo
+
+```
+import org.springframework.data.jdbc.repository.query.Query;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
+import java.util.List;
+
+public interface ProductoRepository extends CrudRepository<Producto, Long> {
+    @Query("SELECT * FROM productos WHERE precio >= :minPrecio AND precio <= :maxPrecio")
+    List<Producto> buscarPorRangoDePrecio(@Param("minPrecio") Double minPrecio, @Param("maxPrecio") Double maxPrecio);
+
+    @Query("SELECT p.nombre, p.precio FROM productos p WHERE p.activo = true")
+    List<Object[]> obtenerNombreYPrecioDeProductosActivos();
+}
+```
+> [!NOTE]
+> 
+> - Es obligatorio el escribir una consulta SQL válida para la base de datos que se está utilizando. Spring Data JDBC no proporciona una abstracción de lenguaje de consulta como JPA (JPQL)
+> - Para consultas que devuelven un subconjunto de columnas (como el segundo ejemplo), el tipo de retorno puede ser una lista de arrays de Object o puedes utilizar proyecciones (interfaces o DTOs) para un mejor tipado
+> - Para consultas que modifican datos (INSERT, UPDATE, DELETE), es necesario **anotar el método con @Modifying**. Por defecto, las consultas @Query se consideran de lectura.
 
 <a id="la-anotacion-param"></a>
 #### La anotación @Param
+Su función principal es dar un nombre explícito a un parámetro de un método de repositorio, esto permite referirte a ese parámetro por su nombre dentro de la consulta SQL personalizada dentro de @Query
+
+> Ejemplo
+```
+import org.springframework.data.jdbc.repository.query.Query;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
+import java.util.List;
+
+public interface ProductoRepository extends CrudRepository<Producto, Long> {
+    @Query("SELECT p FROM productos p WHERE p.nombre LIKE %:nombre%")
+    List<Producto> buscarProductosPorNombreConteniendo(@Param("nombre") String nombre);
+}
+```
+
+Aquí, el parámetro String nombre del método buscarProductosPorNombreConteniendo está anotado con @Param("nombre"). En la consulta SQL, :nombre se refiere al valor que se pasará a este parámetro cuando se invoque el método.
 
 <a id="consultas-nativas"></a>
 #### Consultas Nativas
+En situaciones donde necesitas acceder a funcionalidades específicas de la base de datos que no están cubiertas por las abstracciones de Spring Data JDBC o donde necesitas optimizar consultas complejas, se puede recurrir a las **consultas nativas**. Las consultas nativas te permiten escribir SQL directamente, tal como se realizaría con JDBC puro.
+
+Para ejecutar una consulta nativa, simplemente se utiliza la anotación @Query y establece el atributo nativeQuery a true.
+
+> Ejemplo
+```
+import org.springframework.data.jdbc.repository.query.Query;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
+import java.util.List;
+
+public interface ProductoRepository extends CrudRepository<Producto, Long> {
+    @Query(value = "SELECT id, nombre, precio FROM productos WHERE YEAR(fecha_creacion) = :anio", nativeQuery = true)
+    List<Producto> encontrarProductosCreadosEnAnio(@Param("anio") int anio);
+}
+```
+
+> [!NOTE]
+> Las consultas nativas son específicas para la base de datos en la que se escriben. Si se cambia de base de datos, es probable que se necesite modificar estas consultas.
 
 <a id="personalizando-el-repositorio"></a>
 #### Implementaciones Personalizadas de Repositorio
+A veces, la funcionalidad proporcionada por Spring Data JDBC a través de las interfaces base y los Query Methods no es suficiente. En estos casos, es posible extender la funcionalidad de los repositorios proporcionando una implementación personalizada.
+
+> Pasos para crear una implementación personalizada de repositorio
+1. Se necesita crear una nueva interfaz que contenga los métodos personalizados que se desean agregar al repositorio.
+
+```
+public interface ProductoRepositoryCustom {
+    void actualizarPrecioMasivo(List<Long> ids, Double nuevoPrecio);
+}
+```
+
+2. Es necesario crear una clase que implemente esta interfaz personalizada. El nombre de esta clase debe seguir una convención específica: debe ser el nombre de la interfaz del repositorio principal seguido del sufijo Impl. **Spring Data JDBC buscará automáticamente esta clase**.
+
+```
+public class ProductoRepositoryImpl implements ProductoRepositoryCustom {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    public ProductoRepositoryImpl(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Override
+    public void actualizarPrecioMasivo(List<Long> ids, Double nuevoPrecio) {
+        String sql = "UPDATE productos SET precio = ? WHERE id IN (?)";
+        jdbcTemplate.update(sql, nuevoPrecio, ids.toArray());
+    }
+}
+```
+
+3. Modificamos la interfaz de repositorio principal para que extienda la interfaz personalizada que se ha creado.
+
+```
+@Repository
+public interface ProductoRepository extends CrudRepository<Producto, Long>, ProductoRepositoryCustom {
+    // Métodos de consulta derivados y @Query ...
+}
+```
+De este modo, el **ProductoRepository** tendrá todos los métodos proporcionados por CrudRepository más el método actualizarPrecioMasivo con la implementación que definiste en ProductoRepositoryImpl
 
 <a id="manejo-de-transacciones"></a>
 ### Manejo de Transacciones
 
 <a id="anotacion-transactional"></a>
 #### La anotación @Transactional
+La anotación @Transactional es la forma declarativa más común de gestionar transacciones en Spring. Se puede aplicar esta anotación a nivel de clase o de método en los servicios (o incluso en tus repositorios, aunque es menos común para operaciones de lectura).
+
+> Comportamiento básico de @Transactional:
+> 1. Cuando un método anotado con @Transactional es invocado, Spring inicia una transacción (si no hay ya una activa).
+> 2. Si el método se completa con éxito, Spring confirma (commits) la transacción.
+> 3. Si se lanza una excepción no controlada (RuntimeException o Error) dentro del método, **Spring realiza un rollback de la transacción de forma predeterminada**.
+> 4. Se puede configurar qué tipos de excepciones causarán un rollback utilizando los atributos rollbackFor y noRollbackFor de la anotación @Transactional.
+
+- rollbackFor: Un array de clases de excepción. Si se lanza una excepción de alguno de estos tipos (o una de sus subtipos) dentro del método transaccional, la transacción **se marcará para rollback**.
+
+- noRollbackFor: Un array de clases de excepción. Si se lanza una excepción de alguno de estos tipos (o una de sus subtipos) dentro del método transaccional, la transacción **no se marcará para rollback** (a menos que otra regla de rollback se aplique)
+
+> Ejemplo
+```
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataAccessException;
+
+@Service
+public class ServicioDeCompra {
+
+    private final ProductoRepository productoRepository;
+    private final OrdenRepository ordenRepository;
+
+    public ServicioDeCompra(ProductoRepository productoRepository, OrdenRepository ordenRepository) {
+        this.productoRepository = productoRepository;
+        this.ordenRepository = ordenRepository;
+    }
+
+    @Transactional(rollbackFor = {DataAccessException.class},
+                   noRollbackFor = {IllegalArgumentException.class})
+    public void realizarCompra(Long productoId, int cantidad, Long usuarioId) {
+        //...
+
+        // DataAccessException causarán rollback
+        // IllegalArgumentException NO causará rollback
+    }
+}
+```
 
 <a id="propagacion-de-transacciones"></a>
 #### Propagación de Transacciones
+Cuando un método anotado con @Transactional llama a otro método que también está anotado con @Transactional, **el comportamiento de la transacción se rige por la propagación de la transacción**.
+
+La propagación define cómo se deben comportar las transacciones lógicas cuando los ámbitos de las llamadas a los métodos se cruzan. Spring Framework define varios tipos de propagación de transacciones representados por la enumeración org.springframework.transaction.annotation.Propagation:
 
 <a id="auditoria"></a>
 ### Auditoría
+La auditoría es el proceso de rastrear y registrar información sobre quién o qué realizó cambios en los datos de tu aplicación y cuándo se realizaron esos cambios. Esto es fundamental para la seguridad, la trazabilidad, el cumplimiento normativo y la depuración de problemas.
+
+Para habilitar la auditoría en Spring Data JDBC, generalmente se necesita:
+
+1. Habilitar la auditoría en tu configuración de Spring: Esto se hace típicamente añadiendo la anotación @EnableJdbcAuditing a una clase de configuración de Spring
+```
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jdbc.repository.config.EnableJdbcAuditing;
+
+@Configuration
+@EnableJdbcAuditing
+public class AuditoriaConfig {
+    // Puedes personalizar la configuración de auditoría aquí si es necesario
+}
+```
+
+2. Proporcionar un mecanismo para obtener el "usuario" actual: Para @CreatedBy y @LastModifiedBy, Spring Data necesita saber quién está realizando la acción. Esto se logra implementando la interfaz AuditorAware y registrando un bean de esta implementación en el contexto de Spring
+   
+```
+import org.springframework.data.domain.AuditorAware;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import java.util.Optional;
+
+@Component
+public class SecurityAuditorAware implements AuditorAware<String> {
+
+    @Override
+    public Optional<String> getCurrentAuditor() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(authentication.getName()); // Asume que el nombre del principal es el usuario
+    }
+}
+```
+> [!NOTE]
+> En este ejemplo, se asume que se está utilizando Spring Security para la autenticación y que el nombre del usuario autenticado es lo que se desea registrar como auditor.
 
 <a id="la-anotacion-createdby"></a>
 #### La anotación @CreatedBy
+La anotación @CreatedBy se utiliza a **nivel de campo en la entidad** para marcar el atributo que registrará el "usuario" o la identidad que creó la entidad. El tipo del campo anotado con @CreatedBy debe **coincidir con el tipo que devuelve la implementación de AuditorAware**. En el ejemplo anterior, AuditorAware<String> devuelve un String, por lo que el campo en la entidad debería ser de tipo String.
+
+```
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.relational.core.mapping.Table;
+
+@Table("productos")
+public class Producto {
+    // ... otros atributos ...
+
+    @CreatedBy
+    private String creadoPor; // Registrará el nombre del usuario que creó el producto
+
+}
+```
+Cuando se guarda una nueva instancia de Producto en la base de datos, Spring Data JDBC invocará tu AuditorAware para obtener el "usuario" actual y establecerá el valor del campo creadoPor con ese valor
 
 <a id="la-anotacion-lastmodifiedby"></a>
 #### La anotación @LastModifiedBy
+Similar a @CreatedBy, la anotación @LastModifiedBy se utiliza a nivel de campo para marcar el atributo que registrará el "usuario" o la identidad que modificó por última vez la entidad. Al igual que con @CreatedBy, el tipo del campo debe coincidir con el tipo devuelto por tu AuditorAware.
+```
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.relational.core.mapping.Table;
+
+@Table("productos")
+public class Producto {
+    @CreatedBy
+    private String creadoPor;
+
+    @LastModifiedBy
+    private String modificadoPor; // Registrará el nombre del usuario que modificó el producto por última vez
+}
+```
+Cuando se actualiza una instancia existente de Producto en la base de datos, Spring Data JDBC invocará tu AuditorAware para obtener el "usuario" actual y actualizará el valor del campo modificadoPor con ese valor.
 
 <a id="la-anotacion-created-date"></a>
 #### La anotación @CreatedDate
+La anotación @CreatedDate se utiliza a nivel de campo para marcar el atributo que registrará la fecha y hora en que se creó la entidad. El tipo del campo anotado con @CreatedDate debe ser un tipo de fecha y hora soportado por Spring Data (por ejemplo, java.util.Date, java.time.Instant, java.time.LocalDateTime, etc)
+
+```
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.relational.core.mapping.Table;
+import java.time.LocalDateTime;
+
+@Table("productos")
+public class Producto {
+
+    @CreatedBy
+    private String creadoPor;
+
+    @CreatedDate
+    private LocalDateTime fechaCreacion; // Registrará la fecha y hora de creación
+}
+```
+Cuando se guarda una nueva instancia de Producto, Spring Data JDBC obtendrá la fecha y hora actual y establecerá el valor del campo fechaCreacion.
 
 <a id="la-anotacion-last-modfied-date"></a>
 #### La anotación @LastModifiedDate
 
+Similar a @CreatedDate, la anotación @LastModifiedDate se utiliza a **nivel de campo** para marcar el atributo que registrará la fecha y hora en que se modificó por última vez la entidad. El tipo del campo **debe ser un tipo de fecha y hora soportado**.
+
+```
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.relational.core.mapping.Table;
+import java.time.LocalDateTime;
+
+@Table("productos")
+public class Producto {
+    @CreatedBy
+    private String creadoPor;
+
+    @LastModifiedDate
+    private LocalDateTime fechaModificacion; // Registrará la fecha y hora de la última modificación
+}
+```
+Cuando se actualiza una instancia existente de Producto, Spring Data JDBC obtendrá la fecha y hora actual y actualizará el valor del campo fechaModificacion.
+
 <a id="eventos-de-dominio"></a>
 ### Eventos de Dominio
+
+Los eventos de dominio son una forma de desacoplar la lógica de negocio de las entidades y las operaciones de persistencia. En lugar de que las entidades o repositorios realicen directamente acciones secundarias (como enviar un correo electrónico, publicar un mensaje en una cola, o realizar otras operaciones después de guardar una entidad), es posible hacer que las entidades **publiquen eventos que otras partes de tu aplicación pueden escuchar y procesar**.
+
+Spring Data JDBC se integra con el sistema de eventos de Spring Framework para facilitar la publicación y el manejo de eventos de dominio.
+
+¿Cómo funcionan los eventos de dominio en Spring Data JDBC?
+
+1. Implementar la interfaz **DomainEvents** en la entidad: Esta interfaz tiene un único método, **registerEvents()**, donde se puede devolver una colección de eventos que deben ser publicados cuando la entidad se guarda.
+```
+import org.springframework.data.domain.DomainEvents;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.annotation.Transient;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+@Table("ordenes")
+public class Orden implements DomainEvents {
+
+    @Id
+    private Long id;
+    private Long productoId;
+    private int cantidad;
+    private Long usuarioId;
+    private boolean enviada = false;
+
+    @Transient
+    private final List<Object> domainEvents = new ArrayList<>();
+
+    public void marcarComoEnviada() {
+        this.enviada = true;
+        this.domainEvents.add(new OrdenEnviadaEvent(this.id, this.usuarioId));
+    }
+
+    // Getters y setters ...
+
+    @Override
+    public Collection<Object> registerEvents() {
+        return this.domainEvents;
+    }
+
+    public void clearDomainEvents() {
+        this.domainEvents.clear();
+    }
+}
+```
+
+En este ejemplo, cuando se llama al método marcarComoEnviada(), se crea una instancia de OrdenEnviadaEvent y se añade a la lista domainEvents
+
+
+2. Publicación automática de eventos: Cuando Spring Data JDBC guarda una entidad que implementa DomainEvents, automáticamente publicará todos los eventos registrados en la colección devuelta por registerEvents()
+
+3. Escucha de eventos: Otros componentes de la aplicación pueden escuchar estos eventos utilizando el mecanismo de eventos de Spring (la anotación @EventListener)
+```
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class NotificacionOrdenEnviadaListener {
+
+    @EventListener
+    public void handleOrdenEnviada(OrdenEnviadaEvent event) {
+        System.out.println("Orden " + event.getOrderId() + " enviada al usuario " + event.getUserId());
+        // Aquí podrías enviar un correo electrónico de notificación, etc.
+    }
+}
+```
+Cuando se guarda una Orden y se publica un OrdenEnviadaEvent, el método handleOrdenEnviada en este listener será invocado
+
+4. Limpieza de eventos: Es importante limpiar la lista de eventos después de que se hayan publicado para evitar que se publiquen los mismos eventos varias veces en futuras operaciones de guardado. En el ejemplo anterior, se proporciona un método clearDomainEvents() que podrías llamar después de guardar la entidad (aunque Spring Data JDBC a menudo se encarga de esto internamente)
+
+
+> Beneficios de usar eventos de dominio:
+> 
+> - Desacoplamiento: La lógica de negocio (como enviar notificaciones) se separa de la lógica de persistencia de la entidad. La entidad simplemente "dice" que algo ocurrió.
+> - Mayor cohesión: Las entidades se centran en su estado y comportamiento intrínseco, sin preocuparse por los efectos secundarios en otras partes del sistema.
+> - Mejor capacidad de prueba: Permite probar la lógica de dominio de las entidades más fácilmente sin tener que interactuar con sistemas externos.
